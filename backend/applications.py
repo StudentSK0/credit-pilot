@@ -4,13 +4,14 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.routing import APIRoute
 from psycopg import Connection, sql
 from psycopg.rows import dict_row
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from database import get_connection
+from audit import ApplicationEvent, record_event
+from auth import Actor, CurrentActor, Database, Role, require_client
 
 
 class DecimalJSONRequest(Request):
@@ -80,20 +81,29 @@ class Application(ApplicationFields):
     status: Status
     created_at: datetime
     updated_at: datetime
+    company_id: int | None
+    created_by: int | None
+    version: int
+    owner_id: int | None
 
 
 router = APIRouter(prefix="/api/applications", tags=["applications"], route_class=DecimalJSONRoute)
-Database = Annotated[Connection, Depends(get_connection)]
 
 
-def find_application(connection: Connection, application_id: int, *, lock=False):
+def find_application(connection: Connection, application_id: int, actor: Actor, *, lock=False):
     if not -(2**63) <= application_id < 2**63:
         raise HTTPException(status_code=404, detail="Application not found")
     query = "SELECT * FROM applications WHERE id = %s"
+    parameters = [application_id]
+    if actor.role == Role.CLIENT:
+        query += " AND owner_id = %s"
+        parameters.append(actor.id)
+    elif actor.role != Role.BANK_EMPLOYEE:
+        raise HTTPException(status_code=403, detail="Role is not allowed")
     if lock:
         query += " FOR UPDATE"
     with connection.cursor(row_factory=dict_row) as cursor:
-        cursor.execute(query, (application_id,))
+        cursor.execute(query, parameters)
         application = cursor.fetchone()
     if application is None:
         raise HTTPException(status_code=404, detail="Application not found")
@@ -106,8 +116,10 @@ def require_draft(application):
 
 
 @router.post("", response_model=Application, status_code=201)
-def create_application(fields: ApplicationFields, connection: Database):
+def create_application(fields: ApplicationFields, connection: Database, actor: CurrentActor):
+    require_client(actor)
     values = fields.model_dump()
+    values.update(company_id=actor.company_id, created_by=actor.id, owner_id=actor.id)
     with connection.transaction(), connection.cursor(row_factory=dict_row) as cursor:
         cursor.execute(
             sql.SQL("INSERT INTO applications ({}) VALUES ({}) RETURNING *").format(
@@ -116,26 +128,48 @@ def create_application(fields: ApplicationFields, connection: Database):
             ),
             list(values.values()),
         )
-        return cursor.fetchone()
+        application = cursor.fetchone()
+        record_event(
+            connection, application, actor, "DRAFT_CREATED", None,
+            {field: (None, application[field]) for field in ApplicationFields.model_fields},
+        )
+        return application
 
 
 @router.get("/{application_id}", response_model=Application)
-def get_application(application_id: int, connection: Database):
-    return find_application(connection, application_id)
+def get_application(application_id: int, connection: Database, actor: CurrentActor):
+    return find_application(connection, application_id, actor)
+
+
+@router.get("/{application_id}/events", response_model=list[ApplicationEvent])
+def get_events(
+    application_id: int, connection: Database, actor: CurrentActor,
+    after_id: Annotated[int, Query(ge=0, le=2**63 - 1)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+):
+    find_application(connection, application_id, actor)
+    with connection.cursor(row_factory=dict_row) as cursor:
+        cursor.execute(
+            "SELECT * FROM application_events WHERE application_id = %s AND id > %s ORDER BY id LIMIT %s",
+            (application_id, after_id, limit),
+        )
+        return cursor.fetchall()
 
 
 @router.patch("/{application_id}", response_model=Application)
-def update_application(application_id: int, fields: ApplicationFields, connection: Database):
+def update_application(application_id: int, fields: ApplicationFields, connection: Database, actor: CurrentActor):
+    require_client(actor)
     with connection.transaction():
-        application = find_application(connection, application_id, lock=True)
+        application = find_application(connection, application_id, actor, lock=True)
         require_draft(application)
         values = fields.model_dump(exclude_unset=True)
+        values = {field: value for field, value in values.items() if value != application[field]}
         if not values:
             return application
         with connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
                 sql.SQL(
-                    "UPDATE applications SET {}, updated_at = clock_timestamp() "
+                    "UPDATE applications SET {}, updated_at = clock_timestamp(), version = version + 1 "
                     "WHERE id = %s RETURNING *"
                 ).format(
                     sql.SQL(", ").join(
@@ -144,13 +178,19 @@ def update_application(application_id: int, fields: ApplicationFields, connectio
                 ),
                 [*values.values(), application_id],
             )
-            return cursor.fetchone()
+            updated = cursor.fetchone()
+            record_event(
+                connection, updated, actor, "DRAFT_UPDATED", application["status"],
+                {field: (application[field], updated[field]) for field in values},
+            )
+            return updated
 
 
 @router.post("/{application_id}/submit", response_model=Application)
-def submit_application(application_id: int, connection: Database):
+def submit_application(application_id: int, connection: Database, actor: CurrentActor):
+    require_client(actor)
     with connection.transaction():
-        application = find_application(connection, application_id, lock=True)
+        application = find_application(connection, application_id, actor, lock=True)
         require_draft(application)
         try:
             SubmissionFields.model_validate(
@@ -166,8 +206,10 @@ def submit_application(application_id: int, connection: Database):
             ) from error
         with connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
-                "UPDATE applications SET status = 'SUBMITTED', updated_at = clock_timestamp() "
+                "UPDATE applications SET status = 'SUBMITTED', updated_at = clock_timestamp(), version = version + 1 "
                 "WHERE id = %s RETURNING *",
                 (application_id,),
             )
-            return cursor.fetchone()
+            submitted = cursor.fetchone()
+            record_event(connection, submitted, actor, "SUBMITTED", application["status"], {})
+            return submitted
