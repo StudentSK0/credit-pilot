@@ -1,13 +1,14 @@
 # Модель предметной области Credit Pilot
 
 Статус: T01 закрыта после предварительной приёмки внешним ревью. Ниже разделены
-реальная схема 0001–0003 и будущие расширения. Они не являются банковской схемой
+реальная схема 0001–0004 и будущие расширения. Контракт реализованной T05 —
+[t05-api-contract.md](t05-api-contract.md). Они не являются банковской схемой
 из PDF. [Процесс](application-flow.md) определяет команды;
 [архитектура](architecture.md) — безопасность, будущую оценку и транзакции.
 
 ## Сущности и отношения
 
-Схема объединяет текущее ядро и целевой MVP. CreditProduct, ProcessingRun,
+Схема объединяет текущее ядро и целевой MVP. ProcessingRun,
 ExternalCheck, ScoreResult/Factor, InformationRequest, Decision и симуляции
 ещё не существуют. Текущий журнал — ApplicationEvent (`application_events`).
 
@@ -40,14 +41,15 @@ erDiagram
 одной компании не могут читать чужие заявки. owner_id nullable только для
 legacy-заявок без известного автора; новые API-заявки получают его из сессии.
 
-## Реализованные таблицы после T01
+## Реализованные таблицы T01 и T05
 
 | Сущность | Ключевые данные | Инварианты |
 | --- | --- | --- |
 | Company / companies | id, name, inn | Только seed/совместимость; доступа к заявкам не предоставляет |
 | User / users | id, login, password_hash, role CLIENT/BANK_EMPLOYEE, company_id | CLIENT имеет company_id по существующему CHECK; роль/инициатор получаются из БД, не frontend |
 | Session / sessions | token_hash (PK), csrf_hash, user_id, expires_at | Только хеши токенов; срок 8 часов. revoked_at нет: logout удаляет запись |
-| Application / applications | id, owner_id, company_id, created_by, пять полей заявки, status, version, created_at/updated_at | DRAFT/SUBMITTED, server-generated id; owner_id назначается из сессии. company_id/created_by не дают прав |
+| Application / applications | id, owner_id, company_id, created_by, прежние пять полей, product_code/version и три финансовых поля T05, status, version, created_at/updated_at | DRAFT/SUBMITTED, server-generated id; owner_id назначается из сессии. company_id/created_by не дают прав |
+| CreditProduct / credit_products (T05) | code/version (PK), name, currency, min/max_amount, min/max_term, annual_rate, is_active | Неизменные условия версии; не более одной действующей версии на код; пара code/version заявки — FK, версия фиксируется сервером при submit |
 | ApplicationEvent / application_events | id, application_id, event_type, occurred_at, actor_id, actor_role, previous_status, new_status, application_version, changes JSONB | FK заявки и инициатора NOT NULL; UNIQUE(application_id, application_version); только 3 типа событий |
 
 ## Будущие сущности — Предложение команды
@@ -57,8 +59,7 @@ application_events универсальной таблицей AuditEvent.
 
 | Сущность | Ключевые данные | Инварианты |
 | --- | --- | --- |
-| CreditProduct | code, version, название, назначение, пределы суммы/срока, учебная ставка | Версия неизменна; новые условия — новая версия; состав продуктов см. architecture.md |
-| Расширение Application | product_code/version, финансовые поля — T05; current_processing_run_id — позже | owner_id остаётся границей прав; новые данные не подменяют исходные значения старых заявок |
+| Расширение Application | current_processing_run_id | owner_id остаётся границей прав; новые данные не подменяют исходные значения старых заявок |
 | ProcessingRun | id, application_id, purpose REQUEST/OFFER, state RUNNING/COMPLETE/INCOMPLETE/FAILED, immutable input_snapshot, версии продукта/скоринга/политики/fixtures, started_at/finished_at, error_code | Только текущий REQUEST-run меняет состояние заявки; прежние попытки не перезаписываются |
 | ExternalCheck | id, run_id, source REGISTRY/BKI, state, fixture_version, result_snapshot, checked_at, error_code | Ошибка или отсутствие данных отличается от успешного результата |
 | ScoreResult | id, run_id, score, risk_band, recommendation, derived_values, calculated_at | Только полный набор признаков даёт оценку; нет результата при INCOMPLETE/FAILED |
@@ -85,24 +86,25 @@ body, product_tags, stage_tags) в seed/fixture-файле. Отдельная C
 
 ## Поля заявки и валидация
 
-Первые пять строк уже работают. Продукт и три финансовых поля — T05,
-их ещё нет в БД, запросах и схемах ответов; пока submit требует только пять полей.
+Все поля ниже реализованы в T05; уточнения после отправки остаются будущей задачей.
+В DRAFT product_version=null; клиент меняет
+только product_code, действующая версия фиксируется сервером при submit.
 
 | Поле | Хранение и черновик | При отправке и уточнении |
 | --- | --- | --- |
 | company_name | Строка ≤255, nullable/пустая | Обязательна, не whitespace-only |
 | inn | Строка, nullable/пустая | Ровно 10 или 12 ASCII-цифр, без checksum |
 | credit_purpose | Строка ≤1000, nullable/пустая | Обязательна, не whitespace-only |
-| amount | NUMERIC без автоматического приведения scale; nullable | Сейчас конечная Decimal, >0, максимум 2 знака; границы продукта добавит T05 |
-| term | BIGINT месяцев, nullable | Сейчас >0 в диапазоне BIGINT, дроби отклоняются; границы продукта добавит T05 |
-| product_code/version | Ссылка на версию продукта, nullable в черновике | Выбран существующий продукт; версия фиксируется при отправке |
+| amount | NUMERIC без автоматического приведения scale; nullable | Конечная Decimal, максимум 2 знака; включительные границы продукта |
+| term | BIGINT месяцев, nullable | Включительные границы продукта, дроби отклоняются |
+| product_code/version | Код nullable в черновике, версия серверная | Выбран действующий продукт; версия фиксируется при отправке |
 | monthly_revenue | NUMERIC, nullable | >0, максимум 2 десятичных знака |
 | monthly_operating_expenses | NUMERIC, nullable | ≥0, максимум 2 десятичных знака |
 | existing_monthly_debt_payments | NUMERIC, nullable | ≥0, максимум 2 десятичных знака |
 
 Последние четыре поля — **Предложение команды** для выбора продукта и понятного
-расчёта. Их обязательность при отправке вводится в T05 явно с миграцией и тестами,
-а не считается действующим правилом T01. Будущая ветка NEEDS_INFO используется
+расчёта. Их обязательность при отправке введена T05 явно с миграцией и тестами;
+старые пяти-полевые черновики теперь получают 422 до дополнения. Будущая ветка NEEDS_INFO используется
 для уточнения противоречивых показателей или неполных внешних данных, а не
 для обхода валидации формы. Возраст бизнеса, просрочка и статус регистрации
 приходят из локальных симуляторов и не назначаются клиентом как результат проверки.
@@ -171,13 +173,13 @@ PATCH/submit блокируют строку; version растёт при изм
 Существующие `applications.id`, пять полей, timestamps, DRAFT/SUBMITTED и пути API
 сохранить. Применены 0001 (заявка), 0002 (пользователи, сессии, application_events,
 company_id/created_by/version) и 0003 (owner_id и переименование прежней роли BANK в BANK_EMPLOYEE).
-T05 добавит продукт и финансовые данные новой миграцией; 0001–0003 не редактировать.
+T05 добавила продукт и финансовые данные миграцией 0004; 0001–0003 не изменялись.
 
 0003 переносит owner_id из ранее сохранённого created_by только для CLIENT.
 Без известного автора owner остаётся NULL, CLIENT не видит запись, сотрудник
-может её читать. Продукта нет у всех старых заявок; T05 сначала добавляет nullable
-поля и определяет явную стратегию старых DRAFT/SUBMITTED. Не подставлять случайные
-значения и не изменять SUBMITTED автоматически. Ручное назначение неизвестных
+может её читать. У заявок до T05 новые продуктовые и финансовые поля остаются NULL.
+Старые DRAFT дополняются через PATCH перед submit; старые SUBMITTED остаются
+доступны для чтения и не изменяются автоматически. Ручное назначение неизвестных
 владельцев и событие LEGACY_IMPORTED пока не реализованы и остаются отдельной
 задачей с собственным контрактом. Не выдумывать даты и авторов прежней истории.
 

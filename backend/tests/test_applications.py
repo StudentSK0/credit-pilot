@@ -5,12 +5,19 @@ import pytest
 
 from database import connection_parameters
 
-VALID = {
+LEGACY_VALID = {
     "company_name": "Example business",
     "inn": "1234567890",
     "credit_purpose": "Purchase equipment",
     "amount": "125000.25",
     "term": 12,
+}
+VALID = {
+    **LEGACY_VALID,
+    "product_code": "EQUIPMENT",
+    "monthly_revenue": "200000.00",
+    "monthly_operating_expenses": "100000.00",
+    "existing_monthly_debt_payments": "10000.00",
 }
 
 
