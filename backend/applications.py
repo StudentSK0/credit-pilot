@@ -12,13 +12,17 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from audit import ApplicationEvent, record_event
 from auth import Actor, CurrentActor, Database, Role, require_client
+from products import submission_product
 
 
 class DecimalJSONRequest(Request):
     async def json(self):
         # Preserve decimal JSON numbers before Pydantic sees them.
+        def reject_nonfinite(value):
+            raise json.JSONDecodeError("Non-finite JSON numbers are not allowed", value, 0)
+
         if not hasattr(self, "_json"):
-            self._json = json.loads(await self.body(), parse_float=Decimal)
+            self._json = json.loads(await self.body(), parse_float=Decimal, parse_constant=reject_nonfinite)
         return self._json
 
 
@@ -45,19 +49,26 @@ class ApplicationFields(BaseModel):
     credit_purpose: Annotated[str, Field(max_length=1000)] | None = None
     amount: Decimal | None = None
     term: Annotated[int, Field(strict=True, ge=-(2**63), le=2**63 - 1)] | None = None
+    product_code: Annotated[str, Field(max_length=64)] | None = None
+    monthly_revenue: Decimal | None = None
+    monthly_operating_expenses: Decimal | None = None
+    existing_monthly_debt_payments: Decimal | None = None
 
-    @field_validator("amount", "term", mode="before")
+    @field_validator(
+        "amount", "term", "product_code", "monthly_revenue",
+        "monthly_operating_expenses", "existing_monthly_debt_payments", mode="before",
+    )
     @classmethod
     def empty_number(cls, value):
         if isinstance(value, str) and not value.strip():
             return None
         return value
 
-    @field_validator("amount")
+    @field_validator("amount", "monthly_revenue", "monthly_operating_expenses", "existing_monthly_debt_payments")
     @classmethod
     def exact_amount(cls, value):
         if value is not None and value.as_tuple().exponent < -2:
-            raise ValueError("Amount must have at most two decimal places")
+            raise ValueError("Money must have at most two decimal places")
         return value
 
 
@@ -67,6 +78,10 @@ class SubmissionFields(ApplicationFields):
     credit_purpose: Annotated[str, Field(min_length=1, max_length=1000)]
     amount: Annotated[Decimal, Field(gt=0)]
     term: Annotated[int, Field(strict=True, gt=0, le=2**63 - 1)]
+    product_code: Annotated[str, Field(min_length=1, max_length=64)]
+    monthly_revenue: Annotated[Decimal, Field(gt=0)]
+    monthly_operating_expenses: Annotated[Decimal, Field(ge=0)]
+    existing_monthly_debt_payments: Annotated[Decimal, Field(ge=0)]
 
     @field_validator("company_name", "credit_purpose")
     @classmethod
@@ -77,6 +92,7 @@ class SubmissionFields(ApplicationFields):
 
 
 class Application(ApplicationFields):
+    product_version: str | None = Field(default=None, json_schema_extra={"readOnly": True})
     id: int
     status: Status
     created_at: datetime
@@ -193,7 +209,7 @@ def submit_application(application_id: int, connection: Database, actor: Current
         application = find_application(connection, application_id, actor, lock=True)
         require_draft(application)
         try:
-            SubmissionFields.model_validate(
+            fields = SubmissionFields.model_validate(
                 {field: application[field] for field in ApplicationFields.model_fields}
             )
         except ValidationError as error:
@@ -204,12 +220,17 @@ def submit_application(application_id: int, connection: Database, actor: Current
                     for item in error.errors()
                 ],
             ) from error
+        product = submission_product(connection, fields.product_code, fields.amount, fields.term)
         with connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
-                "UPDATE applications SET status = 'SUBMITTED', updated_at = clock_timestamp(), version = version + 1 "
+                "UPDATE applications SET status = 'SUBMITTED', product_version = %s, "
+                "updated_at = clock_timestamp(), version = version + 1 "
                 "WHERE id = %s RETURNING *",
-                (application_id,),
+                (product["version"], application_id),
             )
             submitted = cursor.fetchone()
-            record_event(connection, submitted, actor, "SUBMITTED", application["status"], {})
+            record_event(
+                connection, submitted, actor, "SUBMITTED", application["status"],
+                {"product_version": (application["product_version"], submitted["product_version"])},
+            )
             return submitted
