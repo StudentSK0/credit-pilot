@@ -1,17 +1,151 @@
-import { ArrowDown, ArrowUpRight, BriefcaseBusiness, FileText, LayoutGrid, ShieldCheck } from 'lucide-react';
-import { useSession } from '../auth/SessionProvider';
+import {
+  ArrowUpRight,
+  ArrowRight,
+  Sparkles,
+  CircleCheck,
+  Clock3,
+} from "lucide-react";
+import { useState } from "react";
+import {
+  useResource,
+  type AppList,
+  type Article,
+  type Scenario,
+} from "../api/business";
+import {
+  ApplicationRows,
+  Empty,
+  Heading,
+  ResourceState,
+} from "../components/Business";
 
 export function ClientDashboard() {
-  const { user } = useSession();
-  return <>
-    <div className="page-heading"><div><span className="eyebrow">ЛИЧНЫЙ КАБИНЕТ</span><h1>Ваш бизнес. Ваши возможности.</h1><p>Всё для следующего шага — в одном месте.</p></div><span className="badge"><span className="prototype-dot" />Прототип T06</span></div>
-    <section className="welcome-card"><div className="welcome-content"><span className="welcome-kicker">НА ПУТИ К РАЗВИТИЮ</span><h2>Бизнес растёт.<br />Кабинет готовится к старту.</h2><p>Скоро здесь можно будет выбрать кредитный продукт, подать заявку и следить за её рассмотрением.</p><a className="button button-light" href="#/products">Кредитные продукты<ArrowUpRight size={18} aria-hidden="true" /></a></div><div className="growth-art" aria-hidden="true"><span className="growth-ring" /><span className="growth-bar bar-one" /><span className="growth-bar bar-two" /><span className="growth-bar bar-three" /><span className="growth-arrow"><ArrowUpRight size={66} strokeWidth={1.3} /></span><span className="growth-label">СЛЕДУЮЩИЙ ШАГ</span></div></section>
-    <div className="section-heading"><h2>Разделы кабинета</h2><span>Постепенно открываем возможности</span></div>
-    <div className="section-cards">
-      <a href="#/products" className="section-card"><div className="card-top"><span className="feature-icon"><BriefcaseBusiness size={23} aria-hidden="true" /></span><ArrowUpRight size={20} aria-hidden="true" /></div><h3>Кредитные продукты</h3><p>Каталог и условия финансирования для задач вашего бизнеса.</p><span className="badge">В разработке</span></a>
-      <a href="#/applications" className="section-card"><div className="card-top"><span className="feature-icon feature-icon-peach"><FileText size={23} aria-hidden="true" /></span><ArrowUpRight size={20} aria-hidden="true" /></div><h3>Мои заявки</h3><p>Заявки, текущие этапы рассмотрения и история изменений.</p><span className="badge">В разработке</span></a>
-    </div>
-    <section className="profile-card"><div className="profile-title"><span className="feature-icon feature-icon-neutral"><LayoutGrid size={21} aria-hidden="true" /></span><div><h2>Ваша учётная запись</h2><p>Данные подтверждены серверной сессией</p></div><ShieldCheck size={22} className="profile-shield" aria-hidden="true" /></div><dl className="profile-data"><div><dt>Пользователь</dt><dd>№ {user!.id}</dd></div><div><dt>Роль</dt><dd>Предприниматель</dd></div><div><dt>Идентификатор компании</dt><dd>{user!.company_id ?? 'Не указан'}</dd></div><div><dt>Среда</dt><dd>Демонстрационная</dd></div></dl></section>
-    <p className="bottom-hint"><ArrowDown size={15} aria-hidden="true" />Каталог и формы заявок появятся после подключения следующих этапов.</p>
-  </>;
+  const applications = useResource<AppList>("/api/applications?limit=4", true);
+  const scenarios = useResource<Scenario[]>("/api/demo-scenarios");
+  const feed = useResource<Article[]>("/api/feed", true);
+  const [article, setArticle] = useState<string | null>(null);
+  return (
+    <>
+      <Heading
+        eyebrow="КАБИНЕТ ПРЕДПРИНИМАТЕЛЯ"
+        title="Ваш бизнес. Следующий шаг."
+        description="Финансирование, которое помогает двигаться вперёд."
+      >
+        <span className="environment-pill">
+          <span />
+          Демонстрационная среда
+        </span>
+      </Heading>
+      <section className="welcome-card live-hero">
+        <div className="welcome-content">
+          <span className="welcome-kicker">ОТ ПЛАНА К ВОЗМОЖНОСТЯМ</span>
+          <h2>
+            У больших планов
+            <br />
+            есть понятный маршрут.
+          </h2>
+          <p>
+            Выберите финансирование для бизнеса. Все этапы, вопросы банка и
+            решение — здесь, в вашем кабинете.
+          </p>
+          <a className="button button-light" href="#/products">
+            Подобрать финансирование
+            <ArrowUpRight size={18} />
+          </a>
+          <div className="hero-trust">
+            <span>
+              <CircleCheck size={14} />
+              Сохранение черновика
+            </span>
+            <span>
+              <Clock3 size={14} />
+              Статус онлайн
+            </span>
+          </div>
+        </div>
+        <div className="growth-art" aria-hidden="true">
+          <span className="growth-ring" />
+          <span className="growth-bar bar-one" />
+          <span className="growth-bar bar-two" />
+          <span className="growth-bar bar-three" />
+          <span className="growth-arrow">
+            <ArrowUpRight size={66} strokeWidth={1.3} />
+          </span>
+          <span className="growth-label">ПРОСТРАНСТВО ДЛЯ РОСТА</span>
+        </div>
+      </section>
+      <div className="section-heading">
+        <h2>
+          Ваши заявки{" "}
+          <span className="count-badge">{applications.data?.total ?? "—"}</span>
+        </h2>
+        <a className="text-button" href="#/applications">
+          Все заявки
+          <ArrowRight size={16} />
+        </a>
+      </div>
+      <ResourceState {...applications} onRetry={applications.refresh} />
+      {applications.data &&
+        (applications.data.items.length ? (
+          <ApplicationRows items={applications.data.items} />
+        ) : (
+          <Empty
+            title="Здесь начнётся ваша история"
+            description="Создайте первую заявку или познакомьтесь с процессом на готовом сценарии."
+          >
+            <a className="button button-primary" href="#/applications/new">
+              Создать заявку
+              <ArrowUpRight size={16} />
+            </a>
+          </Empty>
+        ))}
+      <div className="section-heading">
+        <h2>
+          <Sparkles size={18} /> Попробуйте весь процесс
+        </h2>
+        <span>Четыре синтетических сценария</span>
+      </div>
+      <div className="scenario-grid">
+        {scenarios.data?.map((s, i) => (
+          <a
+            href={`#/applications/new?scenario=${s.code}`}
+            className="scenario-card"
+            key={s.code}
+          >
+            <span className="scenario-index">
+              0{i + 1}
+              <ArrowUpRight size={16} />
+            </span>
+            <span className="eyebrow">{s.label}</span>
+            <h3>{s.title}</h3>
+            <p>{s.description}</p>
+          </a>
+        ))}
+      </div>
+      {scenarios.error && (
+        <ResourceState {...scenarios} onRetry={scenarios.refresh} />
+      )}
+      <div className="section-heading">
+        <h2>Полезно для вашего бизнеса</h2>
+        <span>Материалы под продукт и этап заявки</span>
+      </div>
+      <div className="article-grid">
+        {feed.data?.map((a) => (
+          <article className="article-card" key={a.id}>
+            <span className="eyebrow">{a.tag}</span>
+            <h3>{a.title}</h3>
+            <p>{article === a.id ? a.body : `${a.body.slice(0, 105)}…`}</p>
+            <button
+              className="text-button"
+              onClick={() => setArticle(article === a.id ? null : a.id)}
+              aria-expanded={article === a.id}
+            >
+              {article === a.id ? "Свернуть" : "Читать материал"}
+              <ArrowRight size={15} />
+            </button>
+          </article>
+        ))}
+      </div>
+    </>
+  );
 }

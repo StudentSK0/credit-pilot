@@ -1,0 +1,2948 @@
+{
+  "info": {
+    "name": "Credit Pilot · четыре синтетических сценария",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Запускайте папку по порядку. Локальная симуляция, реальные деньги и подписи отсутствуют. Заполните clientPassword и bankPassword локально; не публикуйте экспорт с паролями/токенами. Cookie jar включён. Повтор папки создаёт новую заявку."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5173"
+    },
+    {
+      "key": "clientPassword",
+      "value": ""
+    },
+    {
+      "key": "bankPassword",
+      "value": ""
+    },
+    {
+      "key": "csrf",
+      "value": ""
+    },
+    {
+      "key": "applicationId",
+      "value": ""
+    },
+    {
+      "key": "version",
+      "value": ""
+    },
+    {
+      "key": "requestId",
+      "value": ""
+    },
+    {
+      "key": "decisionId",
+      "value": ""
+    },
+    {
+      "key": "alternativeAmount",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Пекарня открывает вторую точку",
+      "item": [
+        {
+          "name": "Войти: client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"client-a\",\n  \"password\": \"{{clientPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Создать черновик",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"inn\": \"7700000001\",\n  \"amount\": \"600000.00\",\n  \"term\": 18,\n  \"product_code\": \"WORKING_CAPITAL\",\n  \"credit_purpose\": \"Закупка сырья и запуск второй пекарни\",\n  \"monthly_revenue\": \"450000.00\",\n  \"monthly_operating_expenses\": \"300000.00\",\n  \"existing_monthly_debt_payments\": \"15000.00\",\n  \"company_name\": \"ООО «Северная пекарня»\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Отправить",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{version}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/submit"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Войти: bank",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"bank\",\n  \"password\": \"{{bankPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Проверить",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/checks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Прочитать оценку",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/dossier"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Решение сотрудника",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/decisions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\",\n  \"kind\": \"OFFER\",\n  \"reason_code\": \"STANDARD\",\n  \"explanation\": \"Условия проверены, денежного остатка достаточно\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Войти: client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"client-a\",\n  \"password\": \"{{clientPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Результат для клиента",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/dossier"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Моделировать подписание",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/sign",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\",\n  \"decision_id\": {{decisionId}},\n  \"confirmed\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Войти: bank",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"bank\",\n  \"password\": \"{{bankPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Моделировать выдачу",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/disburse",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Итоговое досье",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/dossier"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "История",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/events"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Мастерская уточняет расходы",
+      "item": [
+        {
+          "name": "Войти: client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"client-a\",\n  \"password\": \"{{clientPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Создать черновик",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"inn\": \"7700000002\",\n  \"amount\": \"900000.00\",\n  \"term\": 24,\n  \"product_code\": \"EQUIPMENT\",\n  \"credit_purpose\": \"Покупка станка. В расходах пока учтена разовая закупка оборудования.\",\n  \"monthly_revenue\": \"600000.00\",\n  \"monthly_operating_expenses\": \"540000.00\",\n  \"existing_monthly_debt_payments\": \"10000.00\",\n  \"company_name\": \"ООО «Мастерская формы»\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Отправить",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{version}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/submit"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Войти: bank",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"bank\",\n  \"password\": \"{{bankPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Проверить",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/checks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Прочитать оценку",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/dossier"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Запросить расходы и документ",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/information-requests",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\",\n  \"message\": \"Уточните регулярные расходы без разовой покупки\",\n  \"fields\": [\n    \"monthly_operating_expenses\"\n  ],\n  \"document_kind\": \"FINANCIAL_REPORT\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Войти: client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"client-a\",\n  \"password\": \"{{clientPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Прочитать запрос",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/dossier"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ответить с документом",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/information-requests/{{requestId}}/reply",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\",\n  \"explanation\": \"Исключили разовую покупку, регулярные расходы 400000.00\",\n  \"fields\": {\n    \"monthly_operating_expenses\": \"400000.00\"\n  },\n  \"documents\": [\n    {\n      \"name\": \"report.txt\",\n      \"content\": \"СИНТЕТИЧЕСКИЙ ОТЧЁТ\\nРегулярные расходы: 400000.00 RUB\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Войти: bank",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"bank\",\n  \"password\": \"{{bankPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Повторно проверить",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/checks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Решение сотрудника",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/decisions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\",\n  \"kind\": \"OFFER\",\n  \"reason_code\": \"STANDARD\",\n  \"explanation\": \"Условия проверены, денежного остатка достаточно\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Войти: client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"client-a\",\n  \"password\": \"{{clientPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Результат для клиента",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/dossier"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Моделировать подписание",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/sign",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\",\n  \"decision_id\": {{decisionId}},\n  \"confirmed\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Войти: bank",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"bank\",\n  \"password\": \"{{bankPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Моделировать выдачу",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/disburse",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Итоговое досье",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/dossier"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "История",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/events"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Логистика с высокой нагрузкой",
+      "item": [
+        {
+          "name": "Войти: client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"client-a\",\n  \"password\": \"{{clientPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Создать черновик",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"inn\": \"7700000003\",\n  \"amount\": \"800000.00\",\n  \"term\": 18,\n  \"product_code\": \"WORKING_CAPITAL\",\n  \"credit_purpose\": \"Пополнение оборотных средств для исполнения заказов\",\n  \"monthly_revenue\": \"350000.00\",\n  \"monthly_operating_expenses\": \"315000.00\",\n  \"existing_monthly_debt_payments\": \"50000.00\",\n  \"company_name\": \"ООО «Вектор логистики»\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Отправить",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{version}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/submit"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Войти: bank",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"bank\",\n  \"password\": \"{{bankPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Проверить",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/checks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Прочитать оценку",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/dossier"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Решение сотрудника",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/decisions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\",\n  \"kind\": \"REJECT\",\n  \"reason_code\": \"AFFORDABILITY\",\n  \"explanation\": \"Денежного остатка недостаточно для выплаты\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Войти: client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"client-a\",\n  \"password\": \"{{clientPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Результат для клиента",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/dossier"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Итоговое досье",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/dossier"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "История",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/events"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Магазин выбирает посильную сумму",
+      "item": [
+        {
+          "name": "Войти: client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"client-a\",\n  \"password\": \"{{clientPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Создать черновик",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"inn\": \"7700000004\",\n  \"amount\": \"1500000.00\",\n  \"term\": 24,\n  \"product_code\": \"WORKING_CAPITAL\",\n  \"credit_purpose\": \"Расширение ассортимента освещения\",\n  \"monthly_revenue\": \"300000.00\",\n  \"monthly_operating_expenses\": \"240000.00\",\n  \"existing_monthly_debt_payments\": \"10000.00\",\n  \"company_name\": \"ООО «Линия света»\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Отправить",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{version}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/submit"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Войти: bank",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"bank\",\n  \"password\": \"{{bankPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Проверить",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/checks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Прочитать оценку",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/dossier"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Решение сотрудника",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/decisions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\",\n  \"kind\": \"OFFER\",\n  \"reason_code\": \"COUNTER_OFFER\",\n  \"explanation\": \"Условия проверены, денежного остатка достаточно\",\n  \"offered_amount\": \"{{alternativeAmount}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Войти: client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"client-a\",\n  \"password\": \"{{clientPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Результат для клиента",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/dossier"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Моделировать подписание",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/sign",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\",\n  \"decision_id\": {{decisionId}},\n  \"confirmed\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Войти: bank",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"bank\",\n  \"password\": \"{{bankPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Моделировать выдачу",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/disburse",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expected_version\": {{version}},\n  \"command_id\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Итоговое досье",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/dossier"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "История",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications/{{applicationId}}/events"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Справочники и аналитика",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Войти: bank",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"bank\",\n  \"password\": \"{{bankPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Продукты",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/products"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Очередь",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/applications?limit=20&offset=0"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Воронка",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/bank/analytics"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Model card",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/bank/model"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Успешный ответ\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]));",
+                  "if (pm.response.code !== 204) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.csrf_token) pm.collectionVariables.set(\"csrf\", body.csrf_token);",
+                  "  if (body.version && body.status) {",
+                  "    pm.collectionVariables.set(\"applicationId\", String(body.id));",
+                  "    pm.collectionVariables.set(\"version\", String(body.version));",
+                  "  }",
+                  "  if (body.application) {",
+                  "    pm.collectionVariables.set(\"version\", String(body.application.version));",
+                  "    if (body.information_requests[0]) pm.collectionVariables.set(\"requestId\", String(body.information_requests[0].id));",
+                  "    if (body.decision) pm.collectionVariables.set(\"decisionId\", String(body.decision.id));",
+                  "    const alternative = body.runs[0] && body.runs[0].assessment && body.runs[0].assessment.alternative;",
+                  "    if (alternative) pm.collectionVariables.set(\"alternativeAmount\", alternative.amount);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

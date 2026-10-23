@@ -1,11 +1,9 @@
-import json
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.routing import APIRoute
+from fastapi import APIRouter, Header, HTTPException, Query
 from psycopg import Connection, sql
 from psycopg.rows import dict_row
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -13,32 +11,19 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from audit import ApplicationEvent, record_event
 from auth import Actor, CurrentActor, Database, Role, require_client
 from products import submission_product
-
-
-class DecimalJSONRequest(Request):
-    async def json(self):
-        # Preserve decimal JSON numbers before Pydantic sees them.
-        def reject_nonfinite(value):
-            raise json.JSONDecodeError("Non-finite JSON numbers are not allowed", value, 0)
-
-        if not hasattr(self, "_json"):
-            self._json = json.loads(await self.body(), parse_float=Decimal, parse_constant=reject_nonfinite)
-        return self._json
-
-
-class DecimalJSONRoute(APIRoute):
-    def get_route_handler(self):
-        handler = super().get_route_handler()
-
-        async def handle(request: Request):
-            return await handler(DecimalJSONRequest(request.scope, request.receive))
-
-        return handle
+from http_types import DecimalJSONRoute
 
 
 class Status(StrEnum):
     DRAFT = "DRAFT"
     SUBMITTED = "SUBMITTED"
+    CHECKING = "CHECKING"
+    UNDER_REVIEW = "UNDER_REVIEW"
+    NEEDS_INFO = "NEEDS_INFO"
+    OFFERED = "OFFERED"
+    REJECTED = "REJECTED"
+    SIGNED = "SIGNED"
+    DISBURSED = "DISBURSED"
 
 
 class ApplicationFields(BaseModel):
@@ -55,8 +40,13 @@ class ApplicationFields(BaseModel):
     existing_monthly_debt_payments: Decimal | None = None
 
     @field_validator(
-        "amount", "term", "product_code", "monthly_revenue",
-        "monthly_operating_expenses", "existing_monthly_debt_payments", mode="before",
+        "amount",
+        "term",
+        "product_code",
+        "monthly_revenue",
+        "monthly_operating_expenses",
+        "existing_monthly_debt_payments",
+        mode="before",
     )
     @classmethod
     def empty_number(cls, value):
@@ -64,7 +54,12 @@ class ApplicationFields(BaseModel):
             return None
         return value
 
-    @field_validator("amount", "monthly_revenue", "monthly_operating_expenses", "existing_monthly_debt_payments")
+    @field_validator(
+        "amount",
+        "monthly_revenue",
+        "monthly_operating_expenses",
+        "existing_monthly_debt_payments",
+    )
     @classmethod
     def exact_amount(cls, value):
         if value is not None and value.as_tuple().exponent < -2:
@@ -92,7 +87,9 @@ class SubmissionFields(ApplicationFields):
 
 
 class Application(ApplicationFields):
-    product_version: str | None = Field(default=None, json_schema_extra={"readOnly": True})
+    product_version: str | None = Field(
+        default=None, json_schema_extra={"readOnly": True}
+    )
     id: int
     status: Status
     created_at: datetime
@@ -103,10 +100,21 @@ class Application(ApplicationFields):
     owner_id: int | None
 
 
-router = APIRouter(prefix="/api/applications", tags=["applications"], route_class=DecimalJSONRoute)
+class ApplicationList(BaseModel):
+    items: list[Application]
+    total: int
+    limit: int
+    offset: int
 
 
-def find_application(connection: Connection, application_id: int, actor: Actor, *, lock=False):
+router = APIRouter(
+    prefix="/api/applications", tags=["applications"], route_class=DecimalJSONRoute
+)
+
+
+def find_application(
+    connection: Connection, application_id: int, actor: Actor, *, lock=False
+):
     if not -(2**63) <= application_id < 2**63:
         raise HTTPException(status_code=404, detail="Application not found")
     query = "SELECT * FROM applications WHERE id = %s"
@@ -131,8 +139,46 @@ def require_draft(application):
         raise HTTPException(status_code=409, detail="Application is not a draft")
 
 
+@router.get("", response_model=ApplicationList)
+def list_applications(
+    connection: Database,
+    actor: CurrentActor,
+    status: Status | None = None,
+    q: Annotated[str, Query(max_length=100)] = "",
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0, le=1000000)] = 0,
+):
+    clauses, params = [], []
+    if actor.role == Role.CLIENT:
+        clauses.append("owner_id = %s")
+        params.append(actor.id)
+    else:
+        clauses.append("status <> 'DRAFT'")
+    if status:
+        clauses.append("status = %s")
+        params.append(status)
+    if q:
+        clauses.append(
+            "(position(lower(%s) in lower(coalesce(company_name,''))) > 0 OR inn = %s OR id::text = %s)"
+        )
+        params.extend([q.strip(), q.strip(), q.strip()])
+    where = " AND ".join(clauses)
+    with connection.cursor(row_factory=dict_row) as cursor:
+        cursor.execute(
+            f"SELECT count(*) AS total FROM applications WHERE {where}", params
+        )
+        total = cursor.fetchone()["total"]
+        cursor.execute(
+            f"SELECT * FROM applications WHERE {where} ORDER BY updated_at DESC, id DESC LIMIT %s OFFSET %s",
+            [*params, limit, offset],
+        )
+        return dict(items=cursor.fetchall(), total=total, limit=limit, offset=offset)
+
+
 @router.post("", response_model=Application, status_code=201)
-def create_application(fields: ApplicationFields, connection: Database, actor: CurrentActor):
+def create_application(
+    fields: ApplicationFields, connection: Database, actor: CurrentActor
+):
     require_client(actor)
     values = fields.model_dump()
     values.update(company_id=actor.company_id, created_by=actor.id, owner_id=actor.id)
@@ -146,8 +192,15 @@ def create_application(fields: ApplicationFields, connection: Database, actor: C
         )
         application = cursor.fetchone()
         record_event(
-            connection, application, actor, "DRAFT_CREATED", None,
-            {field: (None, application[field]) for field in ApplicationFields.model_fields},
+            connection,
+            application,
+            actor,
+            "DRAFT_CREATED",
+            None,
+            {
+                field: (None, application[field])
+                for field in ApplicationFields.model_fields
+            },
         )
         return application
 
@@ -159,7 +212,9 @@ def get_application(application_id: int, connection: Database, actor: CurrentAct
 
 @router.get("/{application_id}/events", response_model=list[ApplicationEvent])
 def get_events(
-    application_id: int, connection: Database, actor: CurrentActor,
+    application_id: int,
+    connection: Database,
+    actor: CurrentActor,
     after_id: Annotated[int, Query(ge=0, le=2**63 - 1)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 100,
 ):
@@ -173,13 +228,29 @@ def get_events(
 
 
 @router.patch("/{application_id}", response_model=Application)
-def update_application(application_id: int, fields: ApplicationFields, connection: Database, actor: CurrentActor):
+def update_application(
+    application_id: int,
+    fields: ApplicationFields,
+    connection: Database,
+    actor: CurrentActor,
+    if_match: Annotated[
+        int | None, Header(alias="If-Match", ge=1, le=2**63 - 1)
+    ] = None,
+):
     require_client(actor)
     with connection.transaction():
         application = find_application(connection, application_id, actor, lock=True)
         require_draft(application)
+        if if_match is not None and application["version"] != if_match:
+            raise HTTPException(
+                409, "Черновик уже изменён. Перезагрузите его перед сохранением"
+            )
         values = fields.model_dump(exclude_unset=True)
-        values = {field: value for field, value in values.items() if value != application[field]}
+        values = {
+            field: value
+            for field, value in values.items()
+            if value != application[field]
+        }
         if not values:
             return application
         with connection.cursor(row_factory=dict_row) as cursor:
@@ -189,25 +260,41 @@ def update_application(application_id: int, fields: ApplicationFields, connectio
                     "WHERE id = %s RETURNING *"
                 ).format(
                     sql.SQL(", ").join(
-                        sql.SQL("{} = %s").format(sql.Identifier(field)) for field in values
+                        sql.SQL("{} = %s").format(sql.Identifier(field))
+                        for field in values
                     )
                 ),
                 [*values.values(), application_id],
             )
             updated = cursor.fetchone()
             record_event(
-                connection, updated, actor, "DRAFT_UPDATED", application["status"],
+                connection,
+                updated,
+                actor,
+                "DRAFT_UPDATED",
+                application["status"],
                 {field: (application[field], updated[field]) for field in values},
             )
             return updated
 
 
 @router.post("/{application_id}/submit", response_model=Application)
-def submit_application(application_id: int, connection: Database, actor: CurrentActor):
+def submit_application(
+    application_id: int,
+    connection: Database,
+    actor: CurrentActor,
+    if_match: Annotated[
+        int | None, Header(alias="If-Match", ge=1, le=2**63 - 1)
+    ] = None,
+):
     require_client(actor)
     with connection.transaction():
         application = find_application(connection, application_id, actor, lock=True)
         require_draft(application)
+        if if_match is not None and application["version"] != if_match:
+            raise HTTPException(
+                409, "Черновик уже изменён. Перезагрузите его перед отправкой"
+            )
         try:
             fields = SubmissionFields.model_validate(
                 {field: application[field] for field in ApplicationFields.model_fields}
@@ -216,11 +303,17 @@ def submit_application(application_id: int, connection: Database, actor: Current
             raise HTTPException(
                 status_code=422,
                 detail=[
-                    {"loc": ["body", *item["loc"]], "msg": item["msg"], "type": item["type"]}
+                    {
+                        "loc": ["body", *item["loc"]],
+                        "msg": item["msg"],
+                        "type": item["type"],
+                    }
                     for item in error.errors()
                 ],
             ) from error
-        product = submission_product(connection, fields.product_code, fields.amount, fields.term)
+        product = submission_product(
+            connection, fields.product_code, fields.amount, fields.term
+        )
         with connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
                 "UPDATE applications SET status = 'SUBMITTED', product_version = %s, "
@@ -230,7 +323,16 @@ def submit_application(application_id: int, connection: Database, actor: Current
             )
             submitted = cursor.fetchone()
             record_event(
-                connection, submitted, actor, "SUBMITTED", application["status"],
-                {"product_version": (application["product_version"], submitted["product_version"])},
+                connection,
+                submitted,
+                actor,
+                "SUBMITTED",
+                application["status"],
+                {
+                    "product_version": (
+                        application["product_version"],
+                        submitted["product_version"],
+                    )
+                },
             )
             return submitted
