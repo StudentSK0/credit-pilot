@@ -12,3 +12,7 @@
 .dist
 *.pdf
 **/.pytest_cache
+
+**/test-results
+**/playwright-report
+.idea

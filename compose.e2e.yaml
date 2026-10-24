@@ -1,0 +1,37 @@
+# Disposable test environment. No application volume is mounted or removed.
+services:
+  postgres:
+    image: postgres:17@sha256:b8faeff7712663c2773a190181e1246e37e364b887611c04658c28b44e2408fe
+    environment:
+      POSTGRES_DB: credit_pilot_e2e
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: synthetic-test-only
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U test_user -d credit_pilot_e2e']
+      interval: 2s
+      timeout: 2s
+      retries: 20
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: credit_pilot_e2e
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: synthetic-test-only
+      ALLOWED_ORIGINS: http://localhost:5183,http://127.0.0.1:5183
+      COOKIE_SECURE: 'false'
+    depends_on:
+      postgres:
+        condition: service_healthy
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - '127.0.0.1:5183:80'
+    depends_on:
+      - backend
